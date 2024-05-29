@@ -134,6 +134,11 @@ func createProxyHandler() func(http.ResponseWriter, *http.Request) {
 		// Restore request body
 		r.Body = io.NopCloser(body)
 
+		if req.Method == "eth_chainId" {
+			rundlerV07Proxy.ServeHTTP(w, r)
+			return
+		}
+
 		wV06 := NewProxyResponseWriter()
 		rundlerV06Proxy.ServeHTTP(wV06, r)
 
