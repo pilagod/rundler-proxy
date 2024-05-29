@@ -73,6 +73,20 @@ type JSONRPCResponse struct {
 	Result  interface{} `json:"result"`
 }
 
+func (r *JSONRPCResponse) Write(w http.ResponseWriter) {
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(r); err != nil {
+		log.Fatal(err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	data := buf.Bytes()
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Length", fmt.Sprint(len(data)))
+	w.WriteHeader(http.StatusOK)
+	w.Write(data)
+}
+
 func getSupportedEntryPoints(url *url.URL) (entryPoints []string, err error) {
 	r := JSONRPCRequest{
 		ID:      1,
@@ -120,17 +134,7 @@ func createProxyHandler() func(http.ResponseWriter, *http.Request) {
 				JSONRPC: req.JSONRPC,
 				Result:  append(entryPointsV06, entryPointsV07...),
 			}
-			var body bytes.Buffer
-			if err := json.NewEncoder(&body).Encode(res); err != nil {
-				log.Fatal(err)
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-			data := body.Bytes()
-			w.Header().Set("Content-Type", "application/json")
-			w.Header().Set("Content-Length", fmt.Sprintf("%d", len(data)))
-			w.WriteHeader(http.StatusOK)
-			w.Write(body.Bytes())
+			res.Write(w)
 			return
 		}
 
