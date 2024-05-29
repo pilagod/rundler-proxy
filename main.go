@@ -135,7 +135,7 @@ func createProxyHandler() func(http.ResponseWriter, *http.Request) {
 		}
 
 		// Restore request body
-		r.Body = io.NopCloser(body)
+		r.Body = io.NopCloser(bytes.NewReader(body.Bytes()))
 
 		// eth_chainId
 		if req.Method == "eth_chainId" {
@@ -183,9 +183,9 @@ func createProxyHandler() func(http.ResponseWriter, *http.Request) {
 		// Data locates at specific bundler
 		if req.Method == "eth_getUserOperationByHash" ||
 			req.Method == "eth_getUserOperationReceipt" {
-			// Try v06 first
+			// Send first to v06
 			rV06 := r.Clone(r.Context())
-			rV06.Body = io.NopCloser(body)
+			rV06.Body = io.NopCloser(bytes.NewReader(body.Bytes()))
 			wV06 := NewProxyResponseWriter()
 			rundlerV06Proxy.ServeHTTP(wV06, rV06)
 			result, err := wV06.ReadJSONRPCResponse()
@@ -206,7 +206,7 @@ func createProxyHandler() func(http.ResponseWriter, *http.Request) {
 			req.Method == "debug_bundler_sendBundleNow" ||
 			req.Method == "debug_bundler_setBundlingMode" {
 			rV06 := r.Clone(r.Context())
-			rV06.Body = io.NopCloser(body)
+			rV06.Body = io.NopCloser(bytes.NewReader(body.Bytes()))
 			wV06 := NewProxyResponseWriter()
 			rundlerV06Proxy.ServeHTTP(wV06, rV06)
 			// Only use v07 response
