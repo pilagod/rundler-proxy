@@ -143,9 +143,30 @@ func createProxyHandler() func(http.ResponseWriter, *http.Request) {
 			return
 		}
 
-		// eth_sendUserOperation
-		// eth_estimateUserOperationGas
-		if req.Method == "eth_sendUserOperation" || req.Method == "eth_estimateUserOperationGas" {
+		// EntryPoint locates at the first param
+		// - debug_bundler_dumpMempool
+		if req.Method == "debug_bundler_dumpMempool" ||
+			req.Method == "debug_bundler_dumpReputation" {
+			entryPoint, ok := req.Params[0].(string)
+			if !ok || !isEntryPointSupported(entryPoint) {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			if isEntryPointV06(entryPoint) {
+				rundlerV06Proxy.ServeHTTP(w, r)
+			} else {
+				rundlerV07Proxy.ServeHTTP(w, r)
+			}
+			return
+		}
+
+		// EntryPoint locates at the second param
+		// - eth_sendUserOperation
+		// - eth_estimateUserOperationGas
+		// - debug_bundler_setReputation
+		if req.Method == "eth_sendUserOperation" ||
+			req.Method == "eth_estimateUserOperationGas" ||
+			req.Method == "debug_bundler_setReputation" {
 			entryPoint, ok := req.Params[1].(string)
 			if !ok || !isEntryPointSupported(entryPoint) {
 				w.WriteHeader(http.StatusBadRequest)
