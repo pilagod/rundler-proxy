@@ -2,6 +2,9 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
+	"fmt"
+	"log"
 	"net/http"
 )
 
@@ -28,4 +31,27 @@ func (w *ProxyResponseWriter) Write(b []byte) (int, error) {
 
 func (w *ProxyResponseWriter) WriteHeader(statusCode int) {
 	w.StatusCode = statusCode
+}
+
+func (w *ProxyResponseWriter) Dump(dest http.ResponseWriter) error {
+	for key, values := range w.Header() {
+		for _, value := range values {
+			dest.Header().Add(key, value)
+		}
+	}
+	dest.WriteHeader(w.StatusCode)
+	data := w.Body.Bytes()
+	dest.Header().Set("Content-Length", fmt.Sprint(len(data)))
+	_, err := dest.Write(data)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return err
+}
+
+func (w *ProxyResponseWriter) ReadJSONRPCResponse() (result JSONRPCResponse, err error) {
+	if err = json.NewDecoder(w.Body).Decode(&result); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+	return
 }

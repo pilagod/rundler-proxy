@@ -154,9 +154,9 @@ func createProxyHandler() func(http.ResponseWriter, *http.Request) {
 			}
 			if isEntryPointV06(entryPoint) {
 				rundlerV06Proxy.ServeHTTP(w, r)
-			} else {
-				rundlerV07Proxy.ServeHTTP(w, r)
+				return
 			}
+			rundlerV07Proxy.ServeHTTP(w, r)
 			return
 		}
 
@@ -174,24 +174,33 @@ func createProxyHandler() func(http.ResponseWriter, *http.Request) {
 			}
 			if isEntryPointV06(entryPoint) {
 				rundlerV06Proxy.ServeHTTP(w, r)
-			} else {
-				rundlerV07Proxy.ServeHTTP(w, r)
+				return
 			}
+			rundlerV07Proxy.ServeHTTP(w, r)
+			return
+		}
+
+		// Data locates at specific bundler
+		if req.Method == "eth_getUserOperationByHash" ||
+			req.Method == "eth_getUserOperationReceipt" {
+			// First trial to rundler v06
+			rV06 := r.Clone(r.Context())
+			rV06.Body = io.NopCloser(body)
+			wV06 := NewProxyResponseWriter()
+			rundlerV06Proxy.ServeHTTP(wV06, rV06)
+			result, err := wV06.ReadJSONRPCResponse()
+			if err != nil || result.Result != nil {
+				wV06.Dump(w)
+				return
+			}
+			// Fallback to rundler v07
+			rundlerV07Proxy.ServeHTTP(w, r)
 			return
 		}
 
 		wV06 := NewProxyResponseWriter()
 		rundlerV06Proxy.ServeHTTP(wV06, r)
-
-		for key, values := range wV06.Header() {
-			for _, value := range values {
-				w.Header().Add(key, value)
-			}
-		}
-		w.WriteHeader(wV06.StatusCode)
-		if _, err := w.Write(wV06.Body.Bytes()); err != nil {
-			log.Fatal(err)
-		}
+		wV06.Dump(w)
 	}
 }
 
