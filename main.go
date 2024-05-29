@@ -183,7 +183,7 @@ func createProxyHandler() func(http.ResponseWriter, *http.Request) {
 		// Data locates at specific bundler
 		if req.Method == "eth_getUserOperationByHash" ||
 			req.Method == "eth_getUserOperationReceipt" {
-			// First trial to rundler v06
+			// Try v06 first
 			rV06 := r.Clone(r.Context())
 			rV06.Body = io.NopCloser(body)
 			wV06 := NewProxyResponseWriter()
@@ -193,14 +193,25 @@ func createProxyHandler() func(http.ResponseWriter, *http.Request) {
 				wV06.Dump(w)
 				return
 			}
-			// Fallback to rundler v07
+			// Fallback to v07
 			rundlerV07Proxy.ServeHTTP(w, r)
 			return
 		}
 
-		wV06 := NewProxyResponseWriter()
-		rundlerV06Proxy.ServeHTTP(wV06, r)
-		wV06.Dump(w)
+		// Fanout to all bundlers
+		// - debug_bundler_clearState
+		// - debug_bundler_sendBundleNow
+		// - debug_bundler_setBundlingMode
+		if req.Method == "debug_bundler_clearState" ||
+			req.Method == "debug_bundler_sendBundleNow" ||
+			req.Method == "debug_bundler_setBundlingMode" {
+			rV06 := r.Clone(r.Context())
+			rV06.Body = io.NopCloser(body)
+			wV06 := NewProxyResponseWriter()
+			rundlerV06Proxy.ServeHTTP(wV06, rV06)
+			// Only use v07 response
+			rundlerV07Proxy.ServeHTTP(w, r)
+		}
 	}
 }
 
