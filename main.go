@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -15,6 +16,9 @@ import (
 var (
 	rundlerV06Proxy *httputil.ReverseProxy
 	entryPointsV06  []string
+
+	rundlerV07Proxy *httputil.ReverseProxy
+	entryPointsV07  []string
 )
 
 func main() {
@@ -22,14 +26,27 @@ func main() {
 	if err != nil {
 		panic("Invalid url: RUNDLER_V0_6")
 	}
-	log.Println("RunderV06:", rundlerV06Url.String())
 	rundlerV06Proxy = httputil.NewSingleHostReverseProxy(rundlerV06Url)
 
-	entryPointsV06, err := getSupportedEntryPoints(rundlerV06Url)
+	entryPointsV06, err = getSupportedEntryPoints(rundlerV06Url)
 	if err != nil {
 		panic(err)
 	}
+	log.Println("RundlerV06:", rundlerV06Url.String())
 	log.Println("EntryPointsV06:", entryPointsV06)
+
+	rundlerV07Url, err := url.Parse(os.Getenv("RUNDLER_V0_7"))
+	if err != nil {
+		panic("Invalid url: RUNDLER_V0_7")
+	}
+	rundlerV07Proxy = httputil.NewSingleHostReverseProxy(rundlerV07Url)
+
+	entryPointsV07, err = getSupportedEntryPoints(rundlerV07Url)
+	if err != nil {
+		panic(err)
+	}
+	log.Println("RunderV07:", rundlerV07Url.String())
+	log.Println("EntryPointsV07:", entryPointsV07)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", createProxyHandler())
@@ -85,14 +102,35 @@ func getSupportedEntryPoints(url *url.URL) (entryPoints []string, err error) {
 
 func createProxyHandler() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		body := new(bytes.Buffer)
-		bodyReader := io.TeeReader(r.Body, body)
+		body := bytes.NewBuffer(nil)
 
-		var jsonRPCRequest JSONRPCRequest
-		if err := json.NewDecoder(bodyReader).Decode(&jsonRPCRequest); err != nil {
+		var req JSONRPCRequest
+		if err := json.NewDecoder(io.TeeReader(r.Body, body)).Decode(&req); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
+
+		// eth_supportedEntryPoints
+		if req.Method == "eth_supportedEntryPoints" {
+			res := JSONRPCResponse{
+				ID:      req.ID,
+				JSONRPC: req.JSONRPC,
+				Result:  append(entryPointsV06, entryPointsV07...),
+			}
+			var body bytes.Buffer
+			if err := json.NewEncoder(&body).Encode(res); err != nil {
+				log.Fatal(err)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			data := body.Bytes()
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Content-Length", fmt.Sprintf("%d", len(data)))
+			w.WriteHeader(http.StatusOK)
+			w.Write(body.Bytes())
+			return
+		}
+
 		// Restore request body
 		r.Body = io.NopCloser(body)
 
