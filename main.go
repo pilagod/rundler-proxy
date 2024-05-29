@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"reflect"
+	"slices"
 )
 
 var (
@@ -19,6 +20,8 @@ var (
 
 	rundlerV07Proxy *httputil.ReverseProxy
 	entryPointsV07  []string
+
+	entryPoints []string
 )
 
 func main() {
@@ -134,8 +137,25 @@ func createProxyHandler() func(http.ResponseWriter, *http.Request) {
 		// Restore request body
 		r.Body = io.NopCloser(body)
 
+		// eth_chainId
 		if req.Method == "eth_chainId" {
 			rundlerV07Proxy.ServeHTTP(w, r)
+			return
+		}
+
+		// eth_sendUserOperation
+		// eth_estimateUserOperationGas
+		if req.Method == "eth_sendUserOperation" || req.Method == "eth_estimateUserOperationGas" {
+			entryPoint, ok := req.Params[1].(string)
+			if !ok || !isEntryPointSupported(entryPoint) {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			if isEntryPointV06(entryPoint) {
+				rundlerV06Proxy.ServeHTTP(w, r)
+			} else {
+				rundlerV07Proxy.ServeHTTP(w, r)
+			}
 			return
 		}
 
@@ -152,4 +172,16 @@ func createProxyHandler() func(http.ResponseWriter, *http.Request) {
 			log.Fatal(err)
 		}
 	}
+}
+
+func isEntryPointSupported(entryPoint string) bool {
+	return slices.Contains(append(entryPointsV06, entryPointsV07...), entryPoint)
+}
+
+func isEntryPointV06(entryPoint string) bool {
+	return slices.Contains(entryPointsV06, entryPoint)
+}
+
+func isEntryPointV07(entryPoint string) bool {
+	return slices.Contains(entryPointsV07, entryPoint)
 }
