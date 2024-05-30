@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"os"
 	"reflect"
 	"slices"
+	"time"
 )
 
 var (
@@ -30,7 +32,10 @@ func main() {
 	}
 	rundlerV06Proxy = httputil.NewSingleHostReverseProxy(rundlerV06Url)
 
-	entryPointsV06, err = getSupportedEntryPoints(rundlerV06Url)
+	entryPointsV06, err = retry(func() ([]string, error) {
+		log.Println("Try to get supported EntryPoints from v06")
+		return getSupportedEntryPoints(rundlerV06Url)
+	}, 60*time.Second)
 	if err != nil {
 		panic(err)
 	}
@@ -43,7 +48,10 @@ func main() {
 	}
 	rundlerV07Proxy = httputil.NewSingleHostReverseProxy(rundlerV07Url)
 
-	entryPointsV07, err = getSupportedEntryPoints(rundlerV07Url)
+	entryPointsV07, err = retry(func() ([]string, error) {
+		log.Println("Try to get supported EntryPoints from v07")
+		return getSupportedEntryPoints(rundlerV07Url)
+	}, 60*time.Second)
 	if err != nil {
 		panic(err)
 	}
@@ -56,6 +64,26 @@ func main() {
 	log.Println("Listening on :3000")
 	if err = http.ListenAndServe(":3000", mux); err != nil {
 		panic(err)
+	}
+}
+
+func retry[T any](action func() (T, error), timeout time.Duration) (T, error) {
+	ch := make(chan T)
+	go func() {
+		for {
+			result, err := action()
+			if err == nil {
+				ch <- result
+			}
+			time.Sleep(3 * time.Second)
+		}
+	}()
+	select {
+	case result := <-ch:
+		return result, nil
+	case <-time.After(timeout):
+		var zero T
+		return zero, fmt.Errorf("server did not reply after %v", timeout)
 	}
 }
 
