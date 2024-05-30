@@ -192,8 +192,8 @@ func createProxyHandler() func(http.ResponseWriter, *http.Request) {
 			rV06.Body = io.NopCloser(bytes.NewReader(body.Bytes()))
 			wV06 := NewProxyResponseWriter()
 			rundlerV06Proxy.ServeHTTP(wV06, rV06)
-			result, err := wV06.ReadJSONRPCResponse()
-			if err != nil || result.Result != nil {
+			res, err := wV06.ReadJSONRPCResponse()
+			if err != nil || res.Result != nil {
 				wV06.Dump(w)
 				return
 			}
@@ -215,7 +215,11 @@ func createProxyHandler() func(http.ResponseWriter, *http.Request) {
 			rundlerV06Proxy.ServeHTTP(wV06, rV06)
 			// Only use v07 response
 			rundlerV07Proxy.ServeHTTP(w, r)
+			return
 		}
+
+		// Default fallback to v07
+		rundlerV07Proxy.ServeHTTP(w, r)
 	}
 }
 

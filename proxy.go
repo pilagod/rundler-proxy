@@ -50,7 +50,7 @@ func (w *ProxyResponseWriter) Dump(dest http.ResponseWriter) error {
 }
 
 func (w *ProxyResponseWriter) ReadJSONRPCResponse() (result JSONRPCResponse, err error) {
-	if err = json.NewDecoder(w.Body).Decode(&result); err != nil {
+	if err = json.NewDecoder(bytes.NewReader(w.Body.Bytes())).Decode(&result); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 	}
 	return
